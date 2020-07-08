@@ -1,0 +1,22 @@
+{
+	"hash": "d41d8cd98f00b204e9800998ecf8427e",
+	"updated": "2020-06-26T11:46:39.3632529-03:00",
+	"installedModules": {
+		"github.com/danieleteti/delphiredisclient": {
+			"name": "delphiredisclient",
+			"version": "v2.0",
+			"hash": "6fd7a2a9ef8e9d639b5a9e845f634dcd",
+			"artifacts": {},
+			"failed": false,
+			"changed": false
+		},
+		"github.com/dliocode/store": {
+			"name": "store",
+			"version": "0.0.1",
+			"hash": "3d0b70b0ec1193e19e2997e96f405411",
+			"artifacts": {},
+			"failed": false,
+			"changed": false
+		}
+	}
+}
