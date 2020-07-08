@@ -1,12 +1,11 @@
 {
-	"name": "HorseSlowDown",
+	"name": "store",
 	"description": "",
 	"version": "1.0.0",
 	"homepage": "",
-	"mainsrc": "./src",
+	"mainsrc": "./",
 	"projects": [],
 	"dependencies": {
-		"github.com/danieleteti/delphiredisclient": "^v2.0",
-		"github.com/dliocode/store": "^0.0.1"
+		"https://github.com/danieleteti/delphiredisclient": "^v2.0"
 	}
 }
