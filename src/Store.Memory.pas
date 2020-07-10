@@ -23,8 +23,8 @@ type
     procedure ResetAll();
     procedure SetTimeout(const ATimeout: Integer);
 
-    class function New(const ATimeout: Integer):TMemoryStore; overload;
-    class function New():TMemoryStore; overload;
+    class function New(const ATimeout: Integer): TMemoryStore; overload;
+    class function New(): TMemoryStore; overload;
   end;
 
 implementation
