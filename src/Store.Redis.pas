@@ -11,8 +11,14 @@ type
   TRedisStore = class(TInterfacedObject, IStore)
   private
     FRedis: TRedisClient;
+    FConnected: Boolean;
+    FHost: string;
+    FPort: Integer;
+    FClientName: string;
     FTimeout: Integer;
 
+    procedure Connect;
+    procedure Disconnect;
     function ProcessExec(const ARA: TRedisArray): TRedisNullable<TRedisString>;
     function SetExpire(const AKey: string; const ARN: TRedisNullable<TRedisString>): Integer;
   public
@@ -31,27 +37,26 @@ implementation
 
 { TRedisStore }
 
+class function TRedisStore.New(const AHost: string; const APort: Integer; const AClientName: string): TRedisStore;
+begin
+  Result := Create(AHost, APort, AClientName);
+end;
+
 constructor TRedisStore.Create(const AHost: string = '127.0.0.1'; const APort: Integer = 6379; const AClientName: string = '');
 begin
-  try
-    FRedis := TRedisClient.Create(AHost, APort);
-    if not(AClientName.Trim.IsEmpty) then
-      FRedis.ClientSetName(AClientName);
-    FRedis.Connect
-  except
-    raise Exception.Create('Connection error in Redis.');
-  end;
+  FConnected := False;
+  FClientName := AClientName;
+  FHost := AHost;
+  FPort := APort;
+
+  FRedis := TRedisClient.Create(AHost, APort);
 end;
 
 destructor TRedisStore.Destroy;
 begin
-  FRedis.Free;
+  Disconnect;
+  FreeAndNil(FRedis);
   inherited;
-end;
-
-class function TRedisStore.New(const AHost: string; const APort: Integer; const AClientName: string): TRedisStore;
-begin
-  Result := Create(AHost, APort, AClientName);
 end;
 
 function TRedisStore.Incr(const AKey: string): TStoreCallback;
@@ -60,6 +65,7 @@ var
   LProcess: TRedisNullable<TRedisString>;
   LTTL: Integer;
 begin
+  Connect;
   LReturn := FRedis.MULTI(
     procedure(const Redis: IRedisClient)
     begin
@@ -80,6 +86,7 @@ var
   LReturn: TRedisArray;
   LProcess: TRedisNullable<TRedisString>;
 begin
+  Connect;
   LReturn := FRedis.MULTI(
     procedure(const Redis: IRedisClient)
     begin
@@ -93,12 +100,50 @@ end;
 
 procedure TRedisStore.ResetAll;
 begin
+  Connect;
   FRedis.FLUSHALL;
 end;
 
 procedure TRedisStore.SetTimeout(const ATimeout: Integer);
 begin
   FTimeout := ATimeout;
+end;
+
+procedure TRedisStore.Connect;
+begin
+  try
+    if not FConnected then
+    begin
+      FRedis.Connect;
+
+      if not FClientName.Trim.IsEmpty then
+        FRedis.ClientSetName(FClientName);
+    end;
+  except
+    on E: Exception do
+    begin
+      FConnected := False;
+      raise Exception.Create('Erro: Connection in Redis. Message: ' + E.Message);
+    end;
+  end;
+
+  FConnected := True;
+end;
+
+procedure TRedisStore.Disconnect;
+begin
+  try
+    if FConnected then
+      FRedis.Disconnect;
+  except
+    on E: Exception do
+    begin
+      FConnected := False;
+      raise Exception.Create('Erro: Disconnect in Redis. Message: ' + E.Message);
+    end;
+  end;
+
+  FConnected := False;
 end;
 
 function TRedisStore.ProcessExec(const ARA: TRedisArray): TRedisNullable<TRedisString>;
@@ -111,6 +156,7 @@ end;
 
 function TRedisStore.SetExpire(const AKey: string; const ARN: TRedisNullable<TRedisString>): Integer;
 begin
+  Connect;
   if (ARN.Value.Value = '-1') then
   begin
     FRedis.EXPIRE(AKey, FTimeout);
