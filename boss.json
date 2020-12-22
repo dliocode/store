@@ -1,9 +1,9 @@
 {
 	"name": "store",
 	"description": "",
-	"version": "1.0.0",
+	"version": "2.0.0",
 	"homepage": "",
-	"mainsrc": "./",
+	"mainsrc": "./src",
 	"projects": [],
 	"dependencies": {
 		"https://github.com/danieleteti/delphiredisclient": "^v2.0"
