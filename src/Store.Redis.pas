@@ -1,11 +1,11 @@
 unit Store.Redis;
-
+
 interface
 
 uses
   Store.Intf,
   Redis.Client, Redis.Values, Redis.NetLib.INDY, Redis.Commons,
-  System.SysUtils, System.DateUtils;
+  System.SysUtils, System.DateUtils, System.SyncObjs;
 
 type
   TRedisStore = class(TInterfacedObject, IStore)
@@ -17,18 +17,18 @@ type
     FClientName: string;
     FTimeout: Integer;
 
+    class var CriticalSection: TCriticalSection;
+
     procedure Connect;
     procedure Disconnect;
-    function ProcessExec(const ARA: TRedisArray): TRedisNullable<TRedisString>;
-    function SetExpire(const AKey: string; const ARN: TRedisNullable<TRedisString>): Integer;
   public
-    constructor Create(const AHost: string = '127.0.0.1'; const APort: Integer = 6379; const AClientName: string = ''); overload;
-    destructor Destroy; override;
-
     function Incr(const AKey: string): TStoreCallback;
     procedure Decrement(const AKey: string);
     procedure ResetAll();
     procedure SetTimeout(const ATimeout: Integer);
+
+    constructor Create(const AHost: string = '127.0.0.1'; const APort: Integer = 6379; const AClientName: string = ''); overload;
+    destructor Destroy; override;
 
     class function New(const AHost: string = '127.0.0.1'; const APort: Integer = 6379; const AClientName: string = ''): TRedisStore; overload;
   end;
@@ -36,11 +36,6 @@ type
 implementation
 
 { TRedisStore }
-
-class function TRedisStore.New(const AHost: string; const APort: Integer; const AClientName: string): TRedisStore;
-begin
-  Result := Create(AHost, APort, AClientName);
-end;
 
 constructor TRedisStore.Create(const AHost: string = '127.0.0.1'; const APort: Integer = 6379; const AClientName: string = '');
 begin
@@ -59,49 +54,64 @@ begin
   inherited;
 end;
 
+class function TRedisStore.New(const AHost: string; const APort: Integer; const AClientName: string): TRedisStore;
+begin
+  Result := Create(AHost, APort, AClientName);
+end;
+
 function TRedisStore.Incr(const AKey: string): TStoreCallback;
 var
-  LReturn: TRedisArray;
-  LProcess: TRedisNullable<TRedisString>;
+  LINCR: Integer;
   LTTL: Integer;
 begin
-  Connect;
-  LReturn := FRedis.MULTI(
-    procedure(const Redis: IRedisClient)
+  CriticalSection.Enter;
+  try
+    Connect;
+
+    LINCR := FRedis.Incr(AKey);
+    LTTL := FRedis.TTL(AKey);
+
+    if LTTL = -1 then
     begin
-      Redis.Incr(AKey);
-      Redis.TTL(AKey);
-    end);
+      FRedis.EXPIRE(AKey, FTimeout);
+      LTTL := FRedis.TTL(AKey);
+    end;
+  finally
+    CriticalSection.Leave;
+  end;
 
-  LProcess := ProcessExec(LReturn);
-
-  LTTL := SetExpire(AKey, LProcess);
-
-  Result.Current := StrToInt(LReturn.Value[0]);
+  Result.Current := LINCR;
   Result.ResetTime := IncSecond(Now(), LTTL);
 end;
 
 procedure TRedisStore.Decrement(const AKey: string);
 var
-  LReturn: TRedisArray;
-  LProcess: TRedisNullable<TRedisString>;
+  LDECR: Integer;
+  LTTL: Integer;
 begin
-  Connect;
-  LReturn := FRedis.MULTI(
-    procedure(const Redis: IRedisClient)
-    begin
-      Redis.DECR(AKey);
-      Redis.TTL(AKey);
-    end);
+  CriticalSection.Enter;
+  try
+    Connect;
 
-  LProcess := ProcessExec(LReturn);
-  SetExpire(AKey, LProcess);
+    LDECR := FRedis.DECR(AKey);
+    LTTL := FRedis.TTL(AKey);
+
+    if LTTL = -1 then
+      FRedis.EXPIRE(AKey, FTimeout);
+  finally
+    CriticalSection.Leave;
+  end;
 end;
 
 procedure TRedisStore.ResetAll;
 begin
-  Connect;
-  FRedis.FLUSHALL;
+  CriticalSection.Enter;
+  try
+    Connect;
+    FRedis.FLUSHALL;
+  finally
+    CriticalSection.Leave;
+  end;
 end;
 
 procedure TRedisStore.SetTimeout(const ATimeout: Integer);
@@ -146,24 +156,13 @@ begin
   FConnected := False;
 end;
 
-function TRedisStore.ProcessExec(const ARA: TRedisArray): TRedisNullable<TRedisString>;
-begin
-  if (Length(ARA.Value) >= 2) then
-    Result := ARA.Value[1]
-  else
-    Result := ARA.Value;
-end;
+initialization
 
-function TRedisStore.SetExpire(const AKey: string; const ARN: TRedisNullable<TRedisString>): Integer;
-begin
-  Connect;
-  if (ARN.Value.Value = '-1') then
-  begin
-    FRedis.EXPIRE(AKey, FTimeout);
-    Result := FTimeout;
-  end
-  else
-    Result := StrToInt(ARN.Value.Value);
-end;
+TRedisStore.CriticalSection := TCriticalSection.Create;
+
+finalization
+
+FreeAndNil(TRedisStore.CriticalSection);
 
 end.
+

@@ -4,14 +4,16 @@ interface
 
 uses
   Store.Intf, Store.Lib.Memory,
-  System.Generics.Collections, System.SysUtils,
-  System.DateUtils;
+  System.Generics.Collections, System.SysUtils, System.DateUtils, System.SyncObjs;
 
 type
   TMemoryStore = class(TInterfacedObject, IStore)
   private
     FTimeout: Integer;
     FList: TMemoryDictionary<TMemory>;
+
+    class var CriticalSection: TCriticalSection;
+
     function ResetKey(ADateTime: TDateTime): Boolean;
     procedure CleanMemory;
   public
@@ -39,7 +41,7 @@ end;
 
 destructor TMemoryStore.Destroy;
 begin
-  FList.Free;
+  FreeAndNil(FList);
 end;
 
 class function TMemoryStore.New(const ATimeout: Integer): TMemoryStore;
@@ -56,25 +58,42 @@ function TMemoryStore.Incr(const AKey: string): TStoreCallback;
 var
   LMemory: TMemory;
 begin
-  if not(FList.TryGetValue(AKey, LMemory)) then
-  begin
-    LMemory.Count := 0;
-    LMemory.DateTime := IncSecond(Now(), FTimeout);
+  CriticalSection.Enter;
+  try
+    if not(FList.TryGetValue(AKey, LMemory)) then
+    begin
+      LMemory.Count := 0;
+      LMemory.DateTime := IncSecond(Now(), FTimeout);
 
-    FList.Add(AKey, LMemory);
+      FList.Add(AKey, LMemory);
+    end;
+  finally
+    CriticalSection.Leave;
   end;
 
   if not(ResetKey(LMemory.DateTime)) then
   begin
     Inc(LMemory.Count);
-    FList.Remove(AKey);
-    FList.Add(AKey, LMemory);
+
+    CriticalSection.Enter;
+    try
+      FList.AddOrSetValue(AKey, LMemory);
+    finally
+      CriticalSection.Leave;
+    end;
+
     Result.Current := LMemory.Count;
     Result.ResetTime := LMemory.DateTime - Now();
   end
   else
   begin
-    FList.Remove(AKey);
+    CriticalSection.Enter;
+    try
+      FList.Remove(AKey);
+    finally
+      CriticalSection.Leave;
+    end;
+
     Result := Incr(AKey);
     CleanMemory;
   end;
@@ -87,7 +106,12 @@ begin
   LMemory.Count := 1;
   LMemory.DateTime := IncSecond(Now(), FTimeout);
 
-  FList.AddOrSetValue(AKey, LMemory);
+  CriticalSection.Enter;
+  try
+    FList.AddOrSetValue(AKey, LMemory);
+  finally
+    CriticalSection.Leave;
+  end;
 
   if not(ResetKey(LMemory.DateTime)) then
   begin
@@ -96,12 +120,22 @@ begin
     if (LMemory.Count < 0) then
       LMemory.Count := 0;
 
-    FList.Remove(AKey);
-    FList.Add(AKey, LMemory);
+    CriticalSection.Enter;
+    try
+      FList.AddOrSetValue(AKey, LMemory);
+    finally
+      CriticalSection.Leave;
+    end;
   end
   else
   begin
-    FList.Remove(AKey);
+    CriticalSection.Enter;
+    try
+      FList.Remove(AKey);
+    finally
+      CriticalSection.Leave;
+    end;
+
     Decrement(AKey);
     CleanMemory;
   end;
@@ -109,7 +143,12 @@ end;
 
 procedure TMemoryStore.ResetAll();
 begin
-  FList.Clear
+  CriticalSection.Enter;
+  try
+    FList.Clear
+  finally
+    CriticalSection.Leave;
+  end;
 end;
 
 procedure TMemoryStore.SetTimeout(const ATimeout: Integer);
@@ -128,7 +167,22 @@ var
 begin
   for LList in FList.Get do
     if ResetKey(LList.Value.DateTime) then
-      FList.Remove(LList.Key);
+    begin
+      CriticalSection.Enter;
+      try
+        FList.Remove(LList.Key);
+      finally
+        CriticalSection.Leave;
+      end;
+    end;
 end;
+
+initialization
+
+TMemoryStore.CriticalSection := TCriticalSection.Create;
+
+finalization
+
+FreeAndNil(TMemoryStore.CriticalSection);
 
 end.
