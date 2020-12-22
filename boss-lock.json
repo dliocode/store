@@ -4,7 +4,7 @@
 	"installedModules": {
 		"https://github.com/danieleteti/delphiredisclient": {
 			"name": "delphiredisclient",
-			"version": "v2.0",
+			"version": "^v2.0",
 			"hash": "6fd7a2a9ef8e9d639b5a9e845f634dcd",
 			"artifacts": {},
 			"failed": false,
