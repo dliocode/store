@@ -1,21 +1,21 @@
 unit Store.Memory;
-
+
 interface
 
 uses
-  Store.Intf, Store.Lib.Memory,
+  Store.Intf,
   System.Generics.Collections, System.SysUtils, System.DateUtils, System.SyncObjs;
 
 type
   TMemoryStore = class(TInterfacedObject, IStore)
   private
     FTimeout: Integer;
-    FList: TMemoryDictionary<TMemory>;
-
-    class var CriticalSection: TCriticalSection;
+    FList: TDictionary<string, TMemory>;
 
     function ResetKey(ADateTime: TDateTime): Boolean;
     procedure CleanMemory;
+
+    class var CriticalSection: TCriticalSection;
   public
     constructor Create(const ATimeout: Integer);
     destructor Destroy; override;
@@ -35,7 +35,7 @@ implementation
 
 constructor TMemoryStore.Create(const ATimeout: Integer);
 begin
-  FList := TMemoryDictionary<TMemory>.Create;
+  FList := TDictionary<string, TMemory>.Create;
   FTimeout := ATimeout;
 end;
 
@@ -157,15 +157,19 @@ begin
 end;
 
 function TMemoryStore.ResetKey(ADateTime: TDateTime): Boolean;
+var
+  LNow: TDate;
 begin
-  Result := Now() > ADateTime;
+  LNow := Now();
+
+  Result := LNow > ADateTime;
 end;
 
 procedure TMemoryStore.CleanMemory;
 var
   LList: TPair<string, TMemory>;
 begin
-  for LList in FList.Get do
+  for LList in FList do
     if ResetKey(LList.Value.DateTime) then
     begin
       CriticalSection.Enter;
@@ -186,3 +190,4 @@ finalization
 FreeAndNil(TMemoryStore.CriticalSection);
 
 end.
+

@@ -28,6 +28,14 @@ package Store;
 {$IMPLICITBUILD ON}
 
 requires
-  rtl;
+  rtl,
+  IndySystem,
+  IndyCore;
+
+contains
+  Store.Config in 'src\Store.Config.pas',
+  Store.Intf in 'src\Store.Intf.pas',
+  Store.Memory in 'src\Store.Memory.pas',
+  Store.Redis in 'src\Store.Redis.pas';
 
 end.

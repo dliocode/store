@@ -1,5 +1,6 @@
 unit Store.Redis;
-
+
+
 interface
 
 uses
@@ -17,10 +18,10 @@ type
     FClientName: string;
     FTimeout: Integer;
 
-    class var CriticalSection: TCriticalSection;
-
     procedure Connect;
     procedure Disconnect;
+
+    class var CriticalSection: TCriticalSection;
   public
     function Incr(const AKey: string): TStoreCallback;
     procedure Decrement(const AKey: string);
@@ -86,14 +87,13 @@ end;
 
 procedure TRedisStore.Decrement(const AKey: string);
 var
-  LDECR: Integer;
   LTTL: Integer;
 begin
   CriticalSection.Enter;
   try
     Connect;
 
-    LDECR := FRedis.DECR(AKey);
+    FRedis.DECR(AKey);
     LTTL := FRedis.TTL(AKey);
 
     if LTTL = -1 then
@@ -165,4 +165,4 @@ finalization
 FreeAndNil(TRedisStore.CriticalSection);
 
 end.
-
+
